@@ -88,3 +88,10 @@ func computeInfoHash(rawData string) ([20]byte, error) {
 	return hash, nil
 
 }
+
+// slanje get zahtjeva trackeru putem announce adrese i obrada odgovora
+/*func SendGetParseResponse(torrent TorrentInfo) (string, error){
+
+
+}*/
+// nakon extractanja i parsiranja peers stringa, ova funkcija razdvaja i parsira ip i port za svakog peera

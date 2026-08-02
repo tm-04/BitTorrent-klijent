@@ -1,11 +1,16 @@
-package main
+package tracker
 
 import (
+	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"log"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"torrentclient/bencode"
 	"torrentclient/torrent"
-	"torrentclient/tracker"
 )
 
 type Peer struct {
@@ -13,12 +18,24 @@ type Peer struct {
 	Port uint16
 }
 
+func GenerateRandomID() ([20]byte, error) {
+	var peerID [20]byte
+
+	prefix := []byte{'-', 'T', 'C', '0', '0', '0', '1', '-'}
+	copy(peerID[:8], prefix)
+
+	randomSuffix := make([]byte, 12)
+	rand.Read(randomSuffix)
+	copy(peerID[8:], randomSuffix)
+
+	return peerID, nil
+}
+
 func ParsePeers(peers string) ([]Peer, error) {
 	var peerList []Peer
 
 	if len(peers)%6 != 0 {
-		log.Fatal("Kriva duljina peera")
-		return peerList, nil
+		return nil, errors.New("kriva duljina peers stringa")
 	}
 
 	numPeers := len(peers) / 6
@@ -35,27 +52,24 @@ func ParsePeers(peers string) ([]Peer, error) {
 	return peerList, nil
 }
 
-func main() {
-	t, err := torrent.LoadTorrent("ubuntu-26.04-desktop-amd64.iso.torrent")
-	if err != nil {
-		fmt.Println("greska:", err)
-		return
-	}
+func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, error) {
+	var empty []Peer
 
-	fmt.Println("Tracker URL:", t.Announce)
-	fmt.Println("Ime:", t.Name)
-	fmt.Println("Piece length:", t.PieceLength)
-	fmt.Println("Duljina fajla:", t.Length)
-	fmt.Println("Broj komada (pieces/20):", len(t.Pieces)/20)
-	fmt.Printf("Info hash (hex): %x\n", t.InfoHash)
-	fmt.Println("\nKraj testnog outputa")
-	/*urlParsed, err := url.Parse(t.Announce)
+	urlParsed, err := url.Parse(t.Announce)
 	if err != nil {
-		log.Fatal(err)
+		return empty, errors.New("greška prilikom parsiranja ip adrese trackera")
 	}
 
 	values := urlParsed.Query()
-	peerID := [20]byte{'-', 'T', 'C', '0', '0', '0', '1', '-', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+
+	peerID, err := GenerateRandomID()
+	if err != nil {
+		return nil, errors.New("greska pri generiranju random peerID-a")
+	}
+	//test
+	//fmt.Printf("\nRandom generirani ID: %s \n---------------------------", peerID)
+	// kraj testa
+
 	values.Add("port", strconv.Itoa(6881))
 	values.Add("peer_id", string(peerID[:]))
 	values.Add("info_hash", string(t.InfoHash[:]))
@@ -69,24 +83,24 @@ func main() {
 
 	res, err := http.Get(urlParsed.String())
 	if err != nil {
-		log.Fatal(err)
+		return empty, err
 	}
 
 	body, err := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	if res.StatusCode > 299 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
+		return empty, fmt.Errorf("tracker vratio status %d: %s", res.StatusCode, body)
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		return empty, err
 	}
 
 	fmt.Printf("\n%s\n", body)
 
 	result, _, err := bencode.Parse(string(body))
 	if err != nil {
-		log.Fatal(err)
+		return empty, err
 	}
 
 	dict := result.(map[string]interface{})
@@ -103,22 +117,14 @@ func main() {
 
 	peerList, err := ParsePeers(peers)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	fmt.Println("Peers:")
-	for i, peer := range peerList {
-		fmt.Printf("%d. IP: %s, Port: %d\n", i+1, peer.IP, peer.Port)
-	}*/
 
-	/*for i := 0; i < len(peerList); i += 1 {
+	return peerList, nil
+}
+
+func PrintPeers(peerList []Peer) {
+	for i := 0; i < len(peerList); i += 1 {
 		fmt.Printf("%d. IP: %s, Port: %d\n", i+1, peerList[i].IP, peerList[i].Port)
-	}*/
-
-	peerList, err := tracker.SendGetParseResponse(t)
-	if err != nil {
-		log.Fatal("error")
 	}
-
-	tracker.PrintPeers(peerList)
-
 }
