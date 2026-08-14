@@ -4,121 +4,143 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"net"
+	"os"
+	"strconv"
+	"torrentclient/peer"
 	"torrentclient/torrent"
 	"torrentclient/tracker"
 )
 
-type Peer struct {
-	IP   string
-	Port uint16
+type pieceResult struct {
+	index int
+	data  []byte
 }
 
-func ParsePeers(peers string) ([]Peer, error) {
-	var peerList []Peer
+func worker() {
 
-	if len(peers)%6 != 0 {
-		log.Fatal("Kriva duljina peera")
-		return peerList, nil
-	}
-
-	numPeers := len(peers) / 6
-	for i := 0; i < numPeers; i += 1 {
-		peerBytes := peers[i*6 : i*6+6]
-		ipBytes := peerBytes[0:4]
-		portBytes := peerBytes[4:6]
-		ip := fmt.Sprintf("%d.%d.%d.%d", ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3])
-		port := binary.BigEndian.Uint16([]byte(portBytes))
-		peer := Peer{IP: ip, Port: port}
-		peerList = append(peerList, peer)
-	}
-
-	return peerList, nil
 }
 
 func main() {
-	t, err := torrent.LoadTorrent("ubuntu-26.04-desktop-amd64.iso.torrent")
+	//ucitavanje torrenta
+	t, err := torrent.LoadTorrent("LibreOffice_26.2.5_Win_x86-64.msi.torrent")
 	if err != nil {
 		fmt.Println("greska:", err)
 		return
 	}
-
+	// test bencode parsera
 	fmt.Println("Tracker URL:", t.Announce)
 	fmt.Println("Ime:", t.Name)
 	fmt.Println("Piece length:", t.PieceLength)
 	fmt.Println("Duljina fajla:", t.Length)
 	fmt.Println("Broj komada (pieces/20):", len(t.Pieces)/20)
 	fmt.Printf("Info hash (hex): %x\n", t.InfoHash)
-	fmt.Println("\nKraj testnog outputa")
-	/*urlParsed, err := url.Parse(t.Announce)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	values := urlParsed.Query()
-	peerID := [20]byte{'-', 'T', 'C', '0', '0', '0', '1', '-', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
-	values.Add("port", strconv.Itoa(6881))
-	values.Add("peer_id", string(peerID[:]))
-	values.Add("info_hash", string(t.InfoHash[:]))
-	values.Add("uploaded", strconv.Itoa(0))
-	values.Add("downloaded", strconv.Itoa(0))
-	values.Add("left", strconv.Itoa(t.Length))
-	values.Add("compact", strconv.Itoa(1))
-	urlParsed.RawQuery = values.Encode()
-
-	fmt.Println("Url nakon modifikacije je: \n", urlParsed.String())
-
-	res, err := http.Get(urlParsed.String())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	defer res.Body.Close()
-	if res.StatusCode > 299 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
-	}
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("\n%s\n", body)
-
-	result, _, err := bencode.Parse(string(body))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dict := result.(map[string]interface{})
-
-	interval, _ := dict["interval"].(int)
-	peers, _ := dict["peers"].(string)
-
-	//len vraca duljinu u byteovima
-	fmt.Println("Interval: ", interval)
-	fmt.Println("Duljina peers stringa (bajtovi):", len(peers))
-	fmt.Println("Duljina cijelog body-ja:", len(body))
-	fmt.Println("Duljina peers stringa:", len(peers))
-	fmt.Println("Broj peerova (peers/6):", len(peers)/6)
-
-	peerList, err := ParsePeers(peers)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Peers:")
-	for i, peer := range peerList {
-		fmt.Printf("%d. IP: %s, Port: %d\n", i+1, peer.IP, peer.Port)
-	}*/
-
-	/*for i := 0; i < len(peerList); i += 1 {
-		fmt.Printf("%d. IP: %s, Port: %d\n", i+1, peerList[i].IP, peerList[i].Port)
-	}*/
-
-	peerList, err := tracker.SendGetParseResponse(t)
+	fmt.Println("\nKraj testnog outputa\n----------------------------------")
+	fmt.Printf("\n")
+	// konekcija s trackerom i parse responsa
+	peerList, peerID, err := tracker.SendGetParseResponse(t)
 	if err != nil {
 		log.Fatal("error")
 	}
+	fmt.Printf("\n\nPeerId: %s\n\n", peerID)
 
 	tracker.PrintPeers(peerList)
+
+	fmt.Println("\nkraj testnog ispisa za komunikaciju s trackerom\n----------------------------------")
+	// TCP konekcija s peerom i handshake
+
+	handshake, err := peer.BuildHandshake(t.InfoHash, peerID)
+	if err != nil {
+		fmt.Println("greska prilikom izrade handshakea")
+	}
+
+	index := 0
+	var conn net.Conn
+	for {
+		address := fmt.Sprintf("%s:%s", peerList[index].IP, strconv.Itoa(int(peerList[index].Port)))
+		conn, err = peer.ConnectToPeer(handshake, address)
+		if err == nil && conn != nil {
+			break
+		}
+		index++
+		if index > 50 {
+			break
+		}
+	}
+
+	//conn := peer.ConnectToPeer(handshake, address)
+	fmt.Println("kraj testnog ispisa za komunikaciju i handshake s peerom\n----------------------------------")
+
+	//TREBA MALO UREDITI OVU POCETNU KOMUNIKACIJU ALI RADI ZA SAD
+	buffer := make([]byte, 5)
+	binary.BigEndian.PutUint32(buffer, 1)
+	buffer[4] = peer.MsgInterested
+	//ovo bi trebalo biti privremeno s ovim indexom i tim stvarima
+
+	msg, err := peer.ReadMessage(conn)
+	if err != nil {
+		log.Fatal("greska", err)
+	}
+
+	fmt.Println("tip poruke", msg.ID)
+	fmt.Println("Duljina payloada", len(msg.Payload))
+	//fmt.Println("Payload", msg.Payload)
+
+	n, err := conn.Write(buffer)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if n != len(buffer) {
+		log.Fatal("broj poslanih bitova nije jednak ocekivanoj duljini poruke")
+	}
+
+	for {
+		msg, err = peer.ReadMessage(conn)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if msg == nil {
+			continue
+		}
+
+		if msg.ID == peer.MsgUnchoke {
+			fmt.Println("Unchoke poruka primljena")
+			break
+		}
+	}
+
+	numPieces := len(t.Pieces) / 20
+	fmt.Println("Broj pieceva:", numPieces)
+	fmt.Println("Velicina jednog piecea", t.PieceLength)
+	//fmt.Printf("Broj pieceva: %d")
+	downloaded := make([]bool, numPieces)
+
+	file, err := os.Create("torrent.msi")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	for i := 0; i < numPieces; i++ {
+		var pieceLen int
+		if i == numPieces-1 {
+			pieceLen = t.Length - (i * t.PieceLength)
+		} else {
+			pieceLen = t.PieceLength
+		}
+		data, err := peer.DownloadPiece(t, conn, i, pieceLen)
+		if err != nil {
+			log.Fatal("Greska prilikom downloada", err)
+		}
+
+		_, err = file.WriteAt(data, int64(i)*int64(t.PieceLength))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		downloaded[i] = true
+
+	}
 
 }

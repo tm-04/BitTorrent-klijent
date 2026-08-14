@@ -52,19 +52,19 @@ func ParsePeers(peers string) ([]Peer, error) {
 	return peerList, nil
 }
 
-func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, error) {
+func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, [20]byte, error) {
 	var empty []Peer
-
+	var emptyid [20]byte
 	urlParsed, err := url.Parse(t.Announce)
 	if err != nil {
-		return empty, errors.New("greška prilikom parsiranja ip adrese trackera")
+		return empty, emptyid, errors.New("greška prilikom parsiranja ip adrese trackera")
 	}
 
 	values := urlParsed.Query()
 
 	peerID, err := GenerateRandomID()
 	if err != nil {
-		return nil, errors.New("greska pri generiranju random peerID-a")
+		return nil, emptyid, errors.New("greska pri generiranju random peerID-a")
 	}
 	//test
 	//fmt.Printf("\nRandom generirani ID: %s \n---------------------------", peerID)
@@ -79,48 +79,48 @@ func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, error) {
 	values.Add("compact", strconv.Itoa(1))
 	urlParsed.RawQuery = values.Encode()
 
-	fmt.Println("Url nakon modifikacije je: \n", urlParsed.String())
+	//fmt.Println("Url nakon modifikacije je: \n", urlParsed.String())
 
 	res, err := http.Get(urlParsed.String())
 	if err != nil {
-		return empty, err
+		return empty, emptyid, err
 	}
 
 	body, err := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	if res.StatusCode > 299 {
-		return empty, fmt.Errorf("tracker vratio status %d: %s", res.StatusCode, body)
+		return empty, emptyid, fmt.Errorf("tracker vratio status %d: %s", res.StatusCode, body)
 	}
 
 	if err != nil {
-		return empty, err
+		return empty, emptyid, err
 	}
 
-	fmt.Printf("\n%s\n", body)
+	//fmt.Printf("\n%s\n", body)
 
 	result, _, err := bencode.Parse(string(body))
 	if err != nil {
-		return empty, err
+		return empty, emptyid, err
 	}
 
 	dict := result.(map[string]interface{})
 
-	interval, _ := dict["interval"].(int)
+	//interval, _ := dict["interval"].(int)
 	peers, _ := dict["peers"].(string)
 
-	//len vraca duljinu u byteovima
+	/*//len vraca duljinu u byteovima
 	fmt.Println("Interval: ", interval)
 	fmt.Println("Duljina peers stringa (bajtovi):", len(peers))
 	fmt.Println("Duljina cijelog body-ja:", len(body))
 	fmt.Println("Duljina peers stringa:", len(peers))
-	fmt.Println("Broj peerova (peers/6):", len(peers)/6)
+	fmt.Println("Broj peerova (peers/6):", len(peers)/6)*/
 
 	peerList, err := ParsePeers(peers)
 	if err != nil {
-		return nil, err
+		return nil, emptyid, err
 	}
 
-	return peerList, nil
+	return peerList, peerID, nil
 }
 
 func PrintPeers(peerList []Peer) {

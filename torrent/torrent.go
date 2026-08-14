@@ -21,7 +21,7 @@ type TorrentInfo struct {
 func LoadTorrent(path string) (*TorrentInfo, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errors.New("greska prilikom citanja torrent datoteke")
+		return nil, err
 	}
 
 	rawData := string(data)
@@ -89,9 +89,13 @@ func computeInfoHash(rawData string) ([20]byte, error) {
 
 }
 
-// slanje get zahtjeva trackeru putem announce adrese i obrada odgovora
-/*func SendGetParseResponse(torrent TorrentInfo) (string, error){
+func (t *TorrentInfo) PieceHashes() [][20]byte {
+	numPieces := len(t.Pieces) / 20
+	hashes := make([][20]byte, numPieces)
 
+	for i := 0; i < numPieces; i++ {
+		copy(hashes[i][:], t.Pieces[i*20:(i+1)*20])
+	}
 
-}*/
-// nakon extractanja i parsiranja peers stringa, ova funkcija razdvaja i parsira ip i port za svakog peera
+	return hashes
+}
