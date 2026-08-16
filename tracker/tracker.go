@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"torrentclient/bencode"
 	"torrentclient/torrent"
 )
@@ -55,7 +56,16 @@ func ParsePeers(peers string) ([]Peer, error) {
 func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, [20]byte, error) {
 	var empty []Peer
 	var emptyid [20]byte
-	urlParsed, err := url.Parse(t.Announce)
+
+	/*for {
+	}*/
+	trackerUrl := pickTracker(t)
+	fmt.Println("Tracker URL:", trackerUrl)
+	if trackerUrl == "" {
+		return nil, emptyid, errors.New("nema dostupnog http trackera")
+	}
+
+	urlParsed, err := url.Parse(trackerUrl)
 	if err != nil {
 		return empty, emptyid, errors.New("greška prilikom parsiranja ip adrese trackera")
 	}
@@ -66,9 +76,6 @@ func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, [20]byte, error) {
 	if err != nil {
 		return nil, emptyid, errors.New("greska pri generiranju random peerID-a")
 	}
-	//test
-	//fmt.Printf("\nRandom generirani ID: %s \n---------------------------", peerID)
-	// kraj testa
 
 	values.Add("port", strconv.Itoa(6881))
 	values.Add("peer_id", string(peerID[:]))
@@ -78,8 +85,6 @@ func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, [20]byte, error) {
 	values.Add("left", strconv.Itoa(t.Length))
 	values.Add("compact", strconv.Itoa(1))
 	urlParsed.RawQuery = values.Encode()
-
-	//fmt.Println("Url nakon modifikacije je: \n", urlParsed.String())
 
 	res, err := http.Get(urlParsed.String())
 	if err != nil {
@@ -127,4 +132,20 @@ func PrintPeers(peerList []Peer) {
 	for i := 0; i < len(peerList); i += 1 {
 		fmt.Printf("%d. IP: %s, Port: %d\n", i+1, peerList[i].IP, peerList[i].Port)
 	}
+}
+
+func pickTracker(torrent *torrent.TorrentInfo) string {
+	prefix := "http"
+
+	if strings.HasPrefix(torrent.Announce, prefix) {
+		return torrent.Announce
+	}
+
+	for _, url := range torrent.AnnounceList {
+		if strings.HasPrefix(url, prefix) {
+			return url
+		}
+	}
+
+	return ""
 }

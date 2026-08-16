@@ -50,7 +50,7 @@ func ConnectToPeer(handshake []byte, address string) (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("greska prilikom otvaranja tcp veze %w", err)
 	} else {
-		fmt.Println("\nSpojen na:", address)
+		//fmt.Println("\nSpojen na:", address)
 	}
 	//defer conn.Close()
 
@@ -152,6 +152,10 @@ func DownloadPiece(t *torrent.TorrentInfo, conn net.Conn, index int, pieceLength
 				return nil, fmt.Errorf("greška prilikom primanja poruke %w", err)
 			}
 
+			if msg == nil {
+				continue
+			}
+
 			if msg.ID == MsgPiece {
 				begin := binary.BigEndian.Uint32(msg.Payload[4:8])
 				copy(pieceData[begin:], msg.Payload[8:])
@@ -165,10 +169,18 @@ func DownloadPiece(t *torrent.TorrentInfo, conn net.Conn, index int, pieceLength
 	expectedHash := t.PieceHashes()[index]
 
 	if hash == expectedHash {
-		fmt.Printf("Piece %d preuzet i provjeren\n", index)
+		//fmt.Printf("Piece %d preuzet i provjeren\n", index)
 		return pieceData, nil
 	} else {
 		fmt.Println("Hash se ne podudara")
 		return nil, errors.New("krivi hash")
 	}
+}
+
+func BuildInterested() []byte {
+	buffer := make([]byte, 5)
+	binary.BigEndian.PutUint32(buffer, 1)
+	buffer[4] = MsgInterested
+
+	return buffer
 }

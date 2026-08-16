@@ -6,11 +6,19 @@ Nakon zavrsetka
 
 
 NOTES
-!!!!!! napravi logiku for petlje kad je vise peerova di trazi prvog slobodnog
-notes nakon 07.08 za 08.08
-gotovo je ovo do unchokea vise manje treba samo tu komunikaciju staviti u for petlju jer moze prije unchokea biti neka druga poruka ili nil za keep alive pa to handleati prvo ujutro
+!!!!!!
+postici spajanje s openttd onim foss, 
+znaci ono find tracker implementirati unutar funkcije al da je fora da kad nade http isproba konekciju ako ne radi da ide na slj http i tako do kraja
 
-for petlja za spajanje na peerove da skipa ove koji su dead
+na laptopu isprobat dal radi
+
+nakon toga
+cmd funkcionalnost da uzima ime torrenta iz cmda
+robusnosti neke mozda 
+kozmetika
+verifikacija cijelog filea? 
+
+
 
 
 

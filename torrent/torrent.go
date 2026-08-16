@@ -9,12 +9,13 @@ import (
 )
 
 type TorrentInfo struct {
-	Announce    string
-	Name        string
-	PieceLength int
-	Pieces      string
-	Length      int
-	InfoHash    [20]byte
+	Announce     string
+	AnnounceList []string
+	Name         string
+	PieceLength  int
+	Pieces       string
+	Length       int
+	InfoHash     [20]byte
 }
 
 // ucitavanje torrent datoteke, parsiranje i izvlacenje kljucnih podataka
@@ -37,7 +38,12 @@ func LoadTorrent(path string) (*TorrentInfo, error) {
 		return nil, errors.New("vanjska struktura nije dictionary")
 	}
 
-	announce, _ := dict["announce"].(string)
+	announce, ok := dict["announce"].(string)
+	if !ok {
+		return nil, errors.New("nedostaje announce")
+	}
+
+	announceList := extractAnnounceList(dict)
 
 	//info - key; cijeli dict - value; sada vrijednost pod dict["info"] spremamo odvojeno da bi mogli razdvojiti njegove podatke. posto je value pod info cijeli dict sad cemo ga samo odvojiti
 	info, ok := dict["info"].(map[string]interface{})
@@ -56,12 +62,13 @@ func LoadTorrent(path string) (*TorrentInfo, error) {
 	}
 
 	return &TorrentInfo{
-		Announce:    announce,
-		Name:        name,
-		PieceLength: pieceLength,
-		Pieces:      pieces,
-		Length:      length,
-		InfoHash:    infoHash,
+		Announce:     announce,
+		AnnounceList: announceList,
+		Name:         name,
+		PieceLength:  pieceLength,
+		Pieces:       pieces,
+		Length:       length,
+		InfoHash:     infoHash,
 	}, nil
 
 }
@@ -98,4 +105,29 @@ func (t *TorrentInfo) PieceHashes() [][20]byte {
 	}
 
 	return hashes
+}
+
+func extractAnnounceList(dict map[string]interface{}) []string {
+	var result []string
+
+	announceListRaw, ok := dict["announce-list"].([]interface{})
+	if !ok {
+		return result
+	}
+
+	for _, tier := range announceListRaw {
+		urls, ok := tier.([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, url := range urls {
+			s, ok := url.(string)
+			if ok {
+				result = append(result, s)
+			}
+		}
+	}
+
+	return result
 }
