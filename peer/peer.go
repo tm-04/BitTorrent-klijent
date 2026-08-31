@@ -8,8 +8,16 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"time"
 	"torrentclient/torrent"
+	"torrentclient/tracker"
+)
+
+const (
+	handshakeTimeout = 5 * time.Second
+	blockTimeout     = 20 * time.Second
+	UnchokeTimeout   = 15 * time.Second
 )
 
 const (
@@ -29,6 +37,7 @@ type Message struct {
 	Payload []byte
 }
 
+// izrada handshake poruke prema pravilima BitTorrent protokola
 func BuildHandshake(infoHash [20]byte, peerID [20]byte) ([]byte, error) {
 
 	handshake := make([]byte, 68)
@@ -44,39 +53,32 @@ func BuildHandshake(infoHash [20]byte, peerID [20]byte) ([]byte, error) {
 	return handshake, nil
 }
 
+// spajanje na peer
 func ConnectToPeer(handshake []byte, address string) (net.Conn, error) {
 
 	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("greska prilikom otvaranja tcp veze %w", err)
-	} else {
-		//fmt.Println("\nSpojen na:", address)
 	}
-	//defer conn.Close()
+	conn.SetDeadline(time.Now().Add(handshakeTimeout))
 
-	n, err := conn.Write(handshake)
+	_, err = conn.Write(handshake)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("greska prilikom handshakea %w", err)
-	} else {
-		fmt.Println("Broj poslanih bajtova: ", n)
 	}
 
 	response := make([]byte, 68)
 
-	n_res, err := io.ReadFull(conn, response)
+	_, err = io.ReadFull(conn, response)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("greska prilikom primanja handshakea %w", err)
-	} else {
-		fmt.Println("Primljeno bajtova: ", n_res)
 	}
 
-	fmt.Println("primljen handshake:")
-	fmt.Println(response)
-
 	if bytes.Equal(response[28:48], handshake[28:48]) {
-		fmt.Println("Uspješan handshake")
+
+		conn.SetDeadline(time.Time{})
 		return conn, nil
 	} else {
 		fmt.Println("Neuspješan handshake")
@@ -84,9 +86,9 @@ func ConnectToPeer(handshake []byte, address string) (net.Conn, error) {
 		return nil, fmt.Errorf("Neuspješan handshake %w", err)
 	}
 
-	//conn.Close()
 }
 
+// funkcija za čitanje odgovora peera
 func ReadMessage(conn net.Conn) (*Message, error) {
 	lengthBuff := make([]byte, 4)
 	_, err := io.ReadFull(conn, lengthBuff)
@@ -131,7 +133,6 @@ func BuildRequest(index, begin, length int) []byte {
 
 func DownloadPiece(t *torrent.TorrentInfo, conn net.Conn, index int, pieceLength int) ([]byte, error) {
 	offset := 0
-	//pieceLength := t.PieceLength
 	pieceData := make([]byte, pieceLength)
 
 	for offset < pieceLength {
@@ -147,6 +148,7 @@ func DownloadPiece(t *torrent.TorrentInfo, conn net.Conn, index int, pieceLength
 		}
 
 		for {
+			conn.SetReadDeadline(time.Now().Add(blockTimeout))
 			msg, err := ReadMessage(conn)
 			if err != nil {
 				return nil, fmt.Errorf("greška prilikom primanja poruke %w", err)
@@ -169,7 +171,6 @@ func DownloadPiece(t *torrent.TorrentInfo, conn net.Conn, index int, pieceLength
 	expectedHash := t.PieceHashes()[index]
 
 	if hash == expectedHash {
-		//fmt.Printf("Piece %d preuzet i provjeren\n", index)
 		return pieceData, nil
 	} else {
 		fmt.Println("Hash se ne podudara")
@@ -183,4 +184,38 @@ func BuildInterested() []byte {
 	buffer[4] = MsgInterested
 
 	return buffer
+}
+
+func FindWorkingConnection(peerPool chan tracker.Peer, handshake []byte) net.Conn {
+peerLoop:
+	for p := range peerPool {
+		address := fmt.Sprintf("%s:%s", p.IP, strconv.Itoa(int(p.Port)))
+		conn, err := ConnectToPeer(handshake, address)
+		if err != nil {
+			continue
+		}
+
+		conn.Write(BuildInterested())
+
+		conn.SetReadDeadline(time.Now().Add(UnchokeTimeout))
+		for {
+			msg, err := ReadMessage(conn)
+			if err != nil {
+				conn.Close()
+				continue peerLoop
+			}
+
+			if msg == nil {
+				continue
+			}
+
+			if msg.ID == MsgUnchoke {
+				//fmt.Printf("Spojeno na %s, Unchoke poruka primljena\n", address)
+				return conn
+			}
+		}
+
+	}
+	return nil
+
 }

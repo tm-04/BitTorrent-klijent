@@ -22,7 +22,7 @@ type Peer struct {
 func GenerateRandomID() ([20]byte, error) {
 	var peerID [20]byte
 
-	prefix := []byte{'-', 'T', 'C', '0', '0', '0', '1', '-'}
+	prefix := []byte{'-', 'Z', 'R', '0', '0', '0', '1', '-'}
 	copy(peerID[:8], prefix)
 
 	randomSuffix := make([]byte, 12)
@@ -60,7 +60,7 @@ func SendGetParseResponse(t *torrent.TorrentInfo) ([]Peer, [20]byte, error) {
 	/*for {
 	}*/
 	trackerUrl := pickTracker(t)
-	fmt.Println("Tracker URL:", trackerUrl)
+	//fmt.Println("Tracker URL:", trackerUrl)
 	if trackerUrl == "" {
 		return nil, emptyid, errors.New("nema dostupnog http trackera")
 	}
@@ -134,6 +134,7 @@ func PrintPeers(peerList []Peer) {
 	}
 }
 
+// bira se prvi tracker koji koristi http/https protokol, a ne UDP
 func pickTracker(torrent *torrent.TorrentInfo) string {
 	prefix := "http"
 

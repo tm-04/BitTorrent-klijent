@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"os"
-	"strconv"
 	"sync"
 	"torrentclient/peer"
 	"torrentclient/torrent"
@@ -21,9 +19,8 @@ func worker(t *torrent.TorrentInfo, handshake []byte, peerPool chan tracker.Peer
 	results chan pieceResult, numPieces int, wg *sync.WaitGroup /*counter *int*/) {
 	defer wg.Done()
 	for {
-		//defer wg.Done()
 
-		conn := findWorkingConnection(peerPool, handshake)
+		conn := peer.FindWorkingConnection(peerPool, handshake)
 		if conn == nil {
 			fmt.Println("Worker nema dostupnih peerova")
 			return
@@ -41,14 +38,14 @@ func worker(t *torrent.TorrentInfo, handshake []byte, peerPool chan tracker.Peer
 
 			data, err := peer.DownloadPiece(t, conn, index, pieceLen)
 			if err != nil {
-				fmt.Println("worker izgubio konekciju na piecu:", index, ":", err)
+				//fmt.Println("worker izgubio konekciju na piecu:", index, ":", err)
 				pieceJobs <- index
 				lostConnection = true
 				break
 			}
 
 			results <- pieceResult{index: index, data: data}
-			//&counter = counter + 1
+
 		}
 
 		conn.Close()
@@ -82,11 +79,10 @@ func main() {
 	fmt.Println("Broj komada (pieces/20):", len(t.Pieces)/20)
 	fmt.Printf("Info hash (hex): %x\n", t.InfoHash)
 	fmt.Println("\nKraj testnog outputa\n----------------------------------")
-	fmt.Printf("\n")
 
-	fmt.Printf("\n\nPeerId: %s\n\n", peerID)
+	fmt.Printf("PeerId: %s\n", peerID)
 
-	tracker.PrintPeers(peerList)
+	//tracker.PrintPeers(peerList)
 
 	if len(peerList) < 1 {
 		log.Fatal("Trazeni torrent file nema ni jednog peera, preuzimanje nije moguce!")
@@ -94,13 +90,13 @@ func main() {
 
 	fmt.Println("Broj peerova: ", len(peerList))
 	fmt.Println("\nkraj testnog ispisa za komunikaciju s trackerom\n----------------------------------")
-
+	fmt.Println("")
 	//Concurrency
 	numPieces := len(t.Pieces) / 20
 
-	peerPool := make(chan tracker.Peer, len(peerList))
-	pieceJobs := make(chan int, numPieces)
-	results := make(chan pieceResult, numPieces)
+	peerPool := make(chan tracker.Peer, len(peerList)) // raspoloživi sudionici
+	pieceJobs := make(chan int, numPieces)             // indeksi komada koje je potrebno preuzeti
+	results := make(chan pieceResult, numPieces)       //preuzeti i provjereni komadi
 
 	for _, p := range peerList {
 		peerPool <- p
@@ -113,7 +109,6 @@ func main() {
 	//close(pieceJobs) ????? ___________________________________________
 
 	// TCP konekcija s peerom i handshake
-
 	handshake, err := peer.BuildHandshake(t.InfoHash, peerID)
 	if err != nil {
 		fmt.Println("greska prilikom izrade handshakea")
@@ -121,7 +116,7 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	numWorkers := min(30, len(peerList))
+	numWorkers := min(10, len(peerList))
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go worker(t, handshake, peerPool, pieceJobs, results, numPieces, &wg)
@@ -144,15 +139,16 @@ func main() {
 		/*if completed == numPieces {
 			close(pieceJobs)
 		}*/
-		fmt.Printf("Piece %d je preuzet i spremljen, preuzeto %d/%d\n", r.index, completed, numPieces)
+		//fmt.Printf("Piece %d je preuzet i spremljen, preuzeto %d/%d\n", r.index, completed, numPieces)
+		fmt.Printf("\rpreuzeto %d/%d", completed, numPieces)
 	}
 
 	//wg.Wait()
 	//close(pieceJobs)
-	fmt.Println("Preuzimanje zavrseno!")
+	fmt.Println("\nPreuzimanje zavrseno!")
 }
 
-func findWorkingConnection(peerPool chan tracker.Peer, handshake []byte) net.Conn {
+/*func findWorkingConnection(peerPool chan tracker.Peer, handshake []byte) net.Conn {
 peerLoop:
 	for p := range peerPool {
 		address := fmt.Sprintf("%s:%s", p.IP, strconv.Itoa(int(p.Port)))
@@ -163,6 +159,7 @@ peerLoop:
 
 		conn.Write(peer.BuildInterested())
 
+		conn.SetReadDeadline(time.Now().Add(peer.UnchokeTimeout))
 		for {
 			msg, err := peer.ReadMessage(conn)
 			if err != nil {
@@ -183,4 +180,4 @@ peerLoop:
 	}
 	return nil
 
-}
+}*/

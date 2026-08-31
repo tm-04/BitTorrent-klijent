@@ -50,11 +50,26 @@ func LoadTorrent(path string) (*TorrentInfo, error) {
 	if !ok {
 		return nil, errors.New("nedostaje info dict")
 	}
+	// tu sam mijenjao
+	name, ok := info["name"].(string)
+	if !ok {
+		return nil, errors.New("nedostaje polje name u info dictu")
+	}
 
-	name, _ := info["name"].(string)
-	pieceLength, _ := info["piece length"].(int)
-	pieces, _ := info["pieces"].(string)
-	length, _ := info["length"].(int)
+	pieceLength, ok := info["piece length"].(int)
+	if !ok {
+		return nil, errors.New("nedostaje polje pieceLength u info dictu")
+	}
+
+	pieces, ok := info["pieces"].(string)
+	if !ok {
+		return nil, errors.New("nedostaje polje pieces u info dictu, klijent podrzava samo torrente s jednom datotekom")
+	}
+
+	length, ok := info["length"].(int)
+	if !ok {
+		return nil, errors.New("nedostaje polje length u info dictu")
+	}
 
 	infoHash, err := computeInfoHash(rawData)
 	if err != nil {

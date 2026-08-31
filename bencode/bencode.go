@@ -20,7 +20,7 @@ func ParseInteger(s string) (int, int, error) {
 	value, err := strconv.Atoi(s[1:end])
 
 	if err != nil {
-		return 0, 0, fmt.Errorf("Neispravan broj")
+		return 0, 0, errors.New("neispravan broj")
 	}
 
 	return value, end + 1, nil
@@ -35,7 +35,7 @@ func ParseString(s string) (string, int, error) {
 	length, err := strconv.Atoi(s[0:colonIndex])
 
 	if err != nil {
-		return "", 0, fmt.Errorf("neispravna duljina stringa")
+		return "", 0, errors.New("neispravna duljina stringa")
 	}
 
 	stringStart := colonIndex + 1
