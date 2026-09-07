@@ -10,7 +10,7 @@ provjerom integriteta svakog komada algoritmom SHA-1.
 # Zahtjevi
 
 - Go 1.26 ili novija verzija
-- 
+  
 # Pokretanje
 
 Klijent se pokreće preko terminala naredbom "go run ." i putanjom do .torrent datoteke kao jedinim argumentom
