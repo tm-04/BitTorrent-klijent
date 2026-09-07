@@ -22,7 +22,7 @@ func worker(t *torrent.TorrentInfo, handshake []byte, peerPool chan tracker.Peer
 
 		conn := peer.FindWorkingConnection(peerPool, handshake)
 		if conn == nil {
-			fmt.Println("Worker nema dostupnih peerova")
+			//fmt.Println("Worker nema dostupnih peerova")
 			return
 		}
 
@@ -96,7 +96,7 @@ func main() {
 
 	peerPool := make(chan tracker.Peer, len(peerList)) // raspoloživi sudionici
 	pieceJobs := make(chan int, numPieces)             // indeksi komada koje je potrebno preuzeti
-	results := make(chan pieceResult, numPieces)       //preuzeti i provjereni komadi
+	results := make(chan pieceResult, numPieces)       // preuzeti i provjereni komadi
 
 	for _, p := range peerList {
 		peerPool <- p
@@ -136,10 +136,6 @@ func main() {
 			log.Fatal(err)
 		}
 		completed++
-		/*if completed == numPieces {
-			close(pieceJobs)
-		}*/
-		//fmt.Printf("Piece %d je preuzet i spremljen, preuzeto %d/%d\n", r.index, completed, numPieces)
 		fmt.Printf("\rpreuzeto %d/%d", completed, numPieces)
 	}
 
